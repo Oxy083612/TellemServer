@@ -31,6 +31,8 @@ async function verify(req, res){
             return res.status(400).send({ success: false, message: "Token doesn't exist"});
         }
 
+        const _userId = rows[0].user_id;
+
         await con.execute('UPDATE users SET is_verified = 1 WHERE id = ?', [_userId]);
 
         await con.execute('DELETE FROM verification_token WHERE user_id = ?', [_userId]);
