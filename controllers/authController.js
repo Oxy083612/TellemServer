@@ -6,18 +6,53 @@ const dotenv = require('dotenv');
 dotenv.config({path: './DB.env'});
 const sendVerificationEmail = require('../utils/sendEmail.js');
 
-const REFRESH_TIME = 7;
+const REFRESH_TIME = 14;
 const VERIFICATION_TIME = 1;
-const ACCESS_TIME = 15;
+const REGISTER_TIME = 1;
+const ACCESS_TIME = 1;
 
 async function communicate(req, res){
     res.send("Komunikat!");
 }
 
 async function refresh(req, res){
-    res.send("Auaua");
+    const refreshToken = String(req.body.refreshToken);
+    console.log(refreshToken);
+    try {
+        if (refreshToken.length <= 0){
+            return res.status(400).send({ success: false, message: "Invalid token."});
+        }
+        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        console.log("verified: " + decoded.userId);
+
+        return res.status(200).send({
+            success: true,
+            accessToken: await generateUserToken(decoded.userId, "accessToken"),
+            message: "Refreshed."
+        });
+    } catch (err) {
+        console.log(err);
+        return res.status(500).send({ success: false, message: "Server error"});
+    }
 }
 
+async function loginToken(req, res){
+    const accessToken = String(req.body.accessToken);
+    console.log(accessToken);
+    try {
+        if (accessToken.length <= 0){
+            return res.status(400).send({ success: false, message: "Invalid token."});
+        }
+        const decoded = jwt.verify(accessToken, process.env.JWT_ACCESS_SECRET);
+        console.log("verified token for: " + decoded.userId);
+
+        return res.status(200).send({ success: true, message: "Logged in."});
+    } catch (err) {
+        console.error(err);
+        res.status(500).send({ success: false, message: "Server error" }); 
+    }
+}
+// need to verify token
 async function verify(req, res){
     const token = req.query.token;
     try {
@@ -47,6 +82,9 @@ async function verify(req, res){
 
 async function login(req, res){
     const { login, password } = req.body;
+    console.log(password);
+    console.log(login);
+    
     try {
         const [ rows ] = await con.execute("SELECT password, id, is_verified FROM users WHERE username = ?", [login]);
 
@@ -60,28 +98,12 @@ async function login(req, res){
 
         const _userId = rows[0].id;
         
-        const refreshToken = jwt.sign(
-            { userId: _userId},
-            process.env.JWT_REFRESH_SECRET,
-            { expiresIn: REFRESH_TIME + 'd'}
-        );
-
-        const accessToken = jwt.sign(
-            { userId: _userId },
-            process.env.JWT_ACCESS_SECRET,
-            { expiresIn: ACCESS_TIME + 'm'}
-        );
-
-        const now = new Date();
-        const expiration_date = new Date(now.getTime() + 24 * 60 * 60 * 1000 * REFRESH_TIME);
-        const formattedDate = expiration_date.toISOString().slice(0, 19).replace('T', ' ');
-
-        const saltRounds = 10;
-        const hashedToken = await bcrypt.hash(refreshToken, saltRounds);
+        const { refreshToken, hashedToken } = generateUserToken(_userId, refreshToken);
+        const accessToken = generateUserToken(_userId, accessToken);
 
         await con.execute('INSERT INTO token (user_id, token_value, expiration_date) VALUES (?, ?, ?)', [_userId, hashedToken, formattedDate]);
         
-        return res.json({
+        return res.status(200).json({
             success: true,
             accessToken,
             refreshToken
@@ -113,11 +135,8 @@ async function register(req, res){
 
         const [rows] = await con.execute('SELECT id FROM users WHERE username = ?', [login]);
         const _userId = rows[0].id;
-        const verificationToken = jwt.sign(
-            { userId: _userId },
-            process.env.JWT_SECRET,
-            { expiresIn: '1d'}
-        )
+        
+        const verificationToken = generateUserToken(_userId, "registerToken");
 
         const now = new Date();
         const expiration_date = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -137,9 +156,55 @@ async function register(req, res){
 
 }
 
+// need to change this function to something more 'safe'
+
+async function generateUserToken(_userId, type){
+    let token;
+    switch (type){
+        case "refreshToken":
+            token = jwt.sign(
+                { userId: _userId },
+                process.env.JWT_REFRESH_SECRET,
+                { expiresIn: REFRESH_TIME + 'd' }    
+            );
+
+            const now = new Date();
+            const expiration_date = new Date(now.getTime() + 24 * 60 * 60 * 1000 * REFRESH_TIME);
+            const formattedDate = expiration_date.toISOString().slice(0, 19).replace('T', ' ');
+
+            const saltRounds = 10;
+            const hashedToken = await bcrypt.hash(token, saltRounds);
+
+            console.log("Hashed Token: " + hashedToken + "\n" + "Token: " + token);
+
+            await con.execute('INSERT INTO token (user_id, token_value, expiration_date) VALUES (?, ?, ?)', [_userId, hashedToken, formattedDate]);
+            return { token, hashedToken };
+
+        case "accessToken":
+            token = jwt.sign(
+                { userId: _userId },
+                process.env.JWT_ACCESS_SECRET,
+                { expiresIn: ACCESS_TIME + 'd' }    
+            );
+            return token;
+
+        case "registerToken":
+            token = jwt.sign(
+                { userId: _userId },
+                process.env.JWT_SECRET,
+                { expiresIn: REGISTER_TIME + 'd'}
+            )
+            return token;
+
+        default:
+            throw new Error("Invalid token type");
+    }
+}
+
 module.exports = {
     communicate,
     refresh,
+    loginToken,
     verify,
     login,
     register
