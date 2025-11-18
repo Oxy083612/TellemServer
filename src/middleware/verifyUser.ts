@@ -50,7 +50,7 @@ function verifyToken(type: TokenType) {
 
         try {
             const decoded = jwt.verify(token, secret) as JwtPayload;
-            (req as any).ID = decoded.ID;
+            req.uID = decoded.uID;
             next();
         } catch(err){
             return res.status(403).json({
@@ -67,7 +67,7 @@ function verifyCredentials(type: CredType){
     return async (req: Request, res: Response, next: NextFunction) => {
         switch (type){
             case CredType.CredLogin: {
-                const { username, password } = (req as any).body;
+                const { username, password } = req.body;
                 user = await userModel.findUserByUsername(username);
                 if(user){
                     if(!userModel.checkIfUserIsVerified(user.id)){
@@ -76,7 +76,7 @@ function verifyCredentials(type: CredType){
                             message: "Account is not verified."})
                     } else {
                         userModel.verifyPassword(password, user.password);
-                        (req as any).user = user.id;
+                        req.uID = user.id;
                         next();
                     }
                 } else {
@@ -87,7 +87,7 @@ function verifyCredentials(type: CredType){
                 break;
             }
             case CredType.CredRegister: {
-                const { username, password, email } = (req as any).body;
+                const { username, password, email } = req.body;
                 user = await userModel.findUserByEmail(email);
                 if(user){
                     return res.status(400).json({
@@ -101,7 +101,7 @@ function verifyCredentials(type: CredType){
                         message: "Username is already taken."
                     })
                 }
-                (req as any).body = { username, password, email };
+                req.body = { username, password, email };
                 next();
             }
         }

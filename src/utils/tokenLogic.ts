@@ -18,7 +18,7 @@ export enum TokenType {
 
 function createToken(uID: number, type: TokenType){
 
-    const payload = { ID: uID, }; 
+    const payload = { uID: uID, }; 
 
     switch (type) {
         case TokenType.accessToken:

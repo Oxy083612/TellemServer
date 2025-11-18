@@ -4,17 +4,6 @@ import verifyUser from "../middleware/verifyUser.js";
 
 const router = express.Router();
 
-interface Message {
-    success: boolean;
-    message: string;
-    accessToken?: string;
-    refreshToken?: string;
-}
-
-interface TokenRequest {
-    token: string;
-}
-
 router.get('/communicate', authController.communicate);
 router.get('/verify', verifyUser.verifyVerificationToken, authController.verify);
 router.post('/refresh', verifyUser.verifyRefreshToken, authController.refresh);

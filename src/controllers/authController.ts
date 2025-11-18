@@ -3,10 +3,6 @@ import { TokenType } from "../utils/tokenLogic.js";
 import tokenLogic from "../utils/tokenLogic.js"
 import emailService from '../utils/sendEmail.js';
 import userModel from "../models/userModel.js";
-import dotenv from "dotenv";
-
-dotenv.config({path: './DB.env'});
-
 
 import type { Response, Request } from "express";
 
@@ -14,7 +10,9 @@ interface Message {
     success: boolean;
     message: string;
     accessToken?: string;
+    accessTokenValidDate?: string;
     refreshToken?: string;
+    refreshTokenValidDate?: string;
 }
 
 interface CredRequest {
@@ -31,14 +29,16 @@ async function communicate(req: Request, res: Response<Message>){
 }
 
 async function refresh(req: Request, res: Response<Message>){
-    const uID = (req as any).ID;
+    const uID = req.uID!;
     try {
         const token = tokenLogic.createToken(uID, TokenType.accessToken);
-
+        const now = new Date();
+        const accessTokenExpires = new Date(now.getTime() + 60 * 60 * 1000);
         return res.status(200).json({
             success: true,
             message: "Token successfully refreshed",
-            accessToken: token
+            accessToken: token,
+            accessTokenValidDate: accessTokenExpires.toISOString().slice(0,19)
         })
     } catch {
         return res.status(500).json({
@@ -49,14 +49,16 @@ async function refresh(req: Request, res: Response<Message>){
 }
 
 async function loginToken(req: Request, res: Response<Message>){
-    const uID = (req as any).ID;
+    const uID = req.uID!;
     try {
         const token = tokenLogic.createToken(uID, TokenType.accessToken);
-
+        const now = new Date();
+        const accessTokenExpires = new Date(now.getTime() + 60 * 60 * 1000);
         return res.status(200).json({
             success: true,
             message: "Successfully logged in",
-            accessToken: token
+            accessToken: token,
+            accessTokenValidDate: accessTokenExpires.toISOString().slice(0,19)
         });
     } catch {
         return res.status(500).json({
@@ -67,7 +69,7 @@ async function loginToken(req: Request, res: Response<Message>){
 }
 
 async function verify(req: Request, res: Response<Message>){
-    const uID = (req as any).ID;
+    const uID = req.uID!;
     console.log("ID UŻYTKOWNIKA: " + uID);
     try {   
         if(!(await userModel.checkIfUserIsVerified(uID))){
@@ -90,16 +92,23 @@ async function verify(req: Request, res: Response<Message>){
 }
 
 async function login(req: Request, res: Response<Message>){
-    const uID = (req as any).user;
+    const uID = req.uID!;
     try {
         const accessToken = tokenLogic.createToken(uID, TokenType.accessToken);
         const refreshToken = tokenLogic.createToken(uID, TokenType.refreshToken);
+
+        const now = new Date();
+        const accessTokenExpires = new Date(now.getTime() + 60 * 60 * 1000);
+        const refreshTokenExpires = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
 
         return res.json({
             success: true,
             message: "Successfully logged in",
             accessToken,
-            refreshToken
+            accessTokenValidDate: accessTokenExpires.toISOString().slice(0,19),            
+            refreshToken,
+            refreshTokenValidDate: refreshTokenExpires.toISOString().slice(0,19)
         });
 
     } catch (err) {
