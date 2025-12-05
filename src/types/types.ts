@@ -13,6 +13,7 @@ declare global {
             uID?: number,
             pID?: number,
             project?: Project,
+            email?: string
         }
     }
 }

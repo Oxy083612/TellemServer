@@ -10,12 +10,14 @@ import type { Response, Request, NextFunction } from "express";
 
 export enum CredType {
     CredLogin,
-    CredRegister
+    CredRegister,
+    CredResend
 }
 
-interface Message {
-    success: boolean;
-    message: string;
+interface AccessLogic {
+    username: string;
+    password: string;
+    email?: string;
 }
 
 function verifyToken(type: TokenType) {
@@ -64,18 +66,23 @@ function verifyToken(type: TokenType) {
 // verify type? verify.login, verify.register?
 function verifyCredentials(type: CredType){
     let user: User | null = null;
-    return async (req: Request, res: Response, next: NextFunction) => {
+    return async (req: Request<AccessLogic>, res: Response, next: NextFunction) => {
         switch (type){
             case CredType.CredLogin: {
-                const { username, password } = req.body;
+                const { username, password }  = req.body as AccessLogic;
                 user = await userModel.findUserByUsername(username);
                 if(user){
-                    if(!userModel.checkIfUserIsVerified(user.id)){
+                    if(!(await userModel.verifyPassword(password, user.password))){
                         return res.status(400).json({
+                            success: false,
+                            message: "Incorrect credentials."})
+                    }
+                    if(!(await userModel.checkIfUserIsVerified(user.id))){
+                        console.log("NOT VERIFIED");
+                        return res.status(403).json({
                             success: false,
                             message: "Account is not verified."})
                     } else {
-                        userModel.verifyPassword(password, user.password);
                         req.uID = user.id;
                         next();
                     }
@@ -87,8 +94,28 @@ function verifyCredentials(type: CredType){
                 break;
             }
             case CredType.CredRegister: {
-                const { username, password, email } = req.body;
+                const { username, password, email } = req.body as AccessLogic;
+                
+                if((username == undefined || username == null) || !username.match("^.{8,}$")){
+                    return res.status(400).json({
+                        success: false,
+                        message: "No username given or it's incorrect."})
+                }
+
+                if((password == undefined || password == null) || !password.match("^(?=.*[A-Z]).{8,}$")){
+                    return res.status(400).json({
+                        success: false,
+                        message: "No password given or it's incorrect."})
+                }
+
+                if((email == undefined || email == null) || !email.match("^[^@\\s]+@[^@\\s]+\\.[^@\\s]{2,}$")){
+                    return res.status(400).json({
+                        success: false,
+                        message: "No E-mail given or it's incorrect."})
+                }
+
                 user = await userModel.findUserByEmail(email);
+                
                 if(user){
                     return res.status(400).json({
                         success: false,
@@ -104,6 +131,26 @@ function verifyCredentials(type: CredType){
                 req.body = { username, password, email };
                 next();
             }
+            case CredType.CredResend: {
+                const { username } = req.body;
+                user = await userModel.findUserByUsername(username);
+                if (user) {
+                    if((await userModel.checkIfUserIsVerified(user.id))) {
+                        
+                        return res.status(400).json({
+                            success: false,
+                            message: "Account is already verified."})
+                    }
+                    req.uID = user.id;
+                    req.email = user.email;
+                    next();
+                } else {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Incorrect credentials."})
+                }
+                break;
+            }
         }
     }
 }
@@ -114,6 +161,7 @@ const verifyVerificationToken = verifyToken(TokenType.verificationToken);
 
 const verifyLogin = verifyCredentials(CredType.CredLogin);
 const verifyRegister = verifyCredentials(CredType.CredRegister);
+const verifyResend = verifyCredentials(CredType.CredResend);
 
 export default {    
     verifyAccessToken, 
@@ -121,4 +169,5 @@ export default {
     verifyVerificationToken,
     verifyCredentials,
     verifyLogin,
-    verifyRegister };
+    verifyRegister,
+    verifyResend };

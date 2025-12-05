@@ -9,6 +9,7 @@ import type { Response, Request } from "express";
 interface Message {
     success: boolean;
     message: string;
+    uID?: number;
     accessToken?: string;
     accessTokenValidDate?: string;
     refreshToken?: string;
@@ -102,9 +103,10 @@ async function login(req: Request, res: Response<Message>){
         const refreshTokenExpires = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
 
-        return res.json({
+        return res.status(200).send({
             success: true,
             message: "Successfully logged in",
+            uID,
             accessToken,
             accessTokenValidDate: accessTokenExpires.toISOString().slice(0,19),            
             refreshToken,
@@ -136,10 +138,26 @@ async function register(req: Request, res: Response<Message>){
 
 }
 
+async function resend(req: Request, res: Response<Message>){
+    const uID = req.uID;
+    const email = req.email;
+    try {
+        const verificationToken = tokenLogic.createToken(uID!!, TokenType.verificationToken); 
+        userModel.createVerificationToken(uID!!, verificationToken);
+        const verificationLink = `http://localhost:3000/verify?token=${verificationToken}`;
+        await emailService.sendVerificationEmail(email!!, verificationLink);
+        return res.status(201).send({ success: true, message: "Account created. Check your email to verify." });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).send({ success: false, message: "Server error" });
+    }
+}
+
 export default {
     communicate,
     refresh,
     loginToken,
     verify,
     login,
-    register };
+    register,
+    resend };

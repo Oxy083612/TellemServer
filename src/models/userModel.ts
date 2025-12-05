@@ -82,7 +82,21 @@ async function createVerificationToken(uID: number, verificationToken: string): 
     const now = new Date();
     const expiration_date = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const formattedDate = expiration_date.toISOString().slice(0, 19).replace('T', ' ');
-    await pool.query("INSERT INTO verification_token (user_id, token, expiration_date) VALUES (?, ?, ?)", [uID, verificationToken, formattedDate]);
+    
+    
+    const [rows] = await pool.query("SELECT * FROM verification_token WHERE user_id = ?", [uID]) as  any[];
+    console.log(rows.length);
+    if ( rows.length === 0 ) {
+        await pool.query("INSERT INTO verification_token (user_id, token, expiration_date) VALUES (?, ?, ?)", [uID, verificationToken, formattedDate]);
+    } else {
+        await updateVerificationToken(uID, verificationToken);
+    }
+
+    
+}
+
+async function updateVerificationToken(uID: number, verification_token: string): Promise<void> {
+    await pool.query("UPDATE verification_token SET token = ? WHERE user_id = ?", [verification_token, uID]);
 }
 
 async function verifyUser(uID: number): Promise<void> {

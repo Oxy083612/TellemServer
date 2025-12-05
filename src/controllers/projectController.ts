@@ -18,10 +18,10 @@ async function createNewProject(req: Request, res: Response<Message>) {
     console.log("CREATING NEW PROJECT");
 
     const project = req.body as Project;
-    console.log(project);
     const uID = req.uID!;
     try {
         const newProject = await projectModel.createProject(project, uID);
+        console.log("NOWY: " + newProject.name)
         if(newProject){
             res.status(200).send({
                 success: true,
